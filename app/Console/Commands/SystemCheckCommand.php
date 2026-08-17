@@ -50,7 +50,6 @@ class SystemCheckCommand extends Command
     protected array $requiredPhpExtensions = [
         'curl',
         'gd',
-        'imagick',
         'intl',
         'json',
         'mbstring',
@@ -75,7 +74,6 @@ class SystemCheckCommand extends Command
         // 'qpdf',
         // 'pnpm',
         'unzip',
-        'zip',
     ];
 
     /**
