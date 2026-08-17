@@ -32,9 +32,11 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="pgsql"/>
-        <env name="DB_HOST" value="localhost"/>
+        <!-- The Docker service name; CI overrides this with a real env var, which takes precedence. -->
+        <env name="DB_HOST" value="postgres"/>
         <env name="DB_PORT" value="5432"/>
-        <env name="DB_DATABASE" value="laravel"/>
+        <!-- Never the development database: the suite uses RefreshDatabase, which would drop it. -->
+        <env name="DB_DATABASE" value="laravel_testing"/>
         <env name="DB_USERNAME" value="forge"/>
         <env name="DB_PASSWORD" value="forge"/>
         <env name="MAIL_MAILER" value="array"/>

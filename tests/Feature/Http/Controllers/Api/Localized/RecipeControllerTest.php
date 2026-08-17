@@ -21,8 +21,6 @@ final class RecipeControllerTest extends TestCase
 
     private Country $country;
 
-    private string $token;
-
     #[Override]
     protected function setUp(): void
     {
@@ -32,11 +30,6 @@ final class RecipeControllerTest extends TestCase
             'code' => 'DE',
             'locales' => ['de', 'en'],
         ]);
-
-        $user = User::factory()->create();
-
-        // Create a real Sanctum token for API authentication
-        $this->token = $user->createToken('test-token')->plainTextToken;
     }
 
     /**
@@ -50,15 +43,13 @@ final class RecipeControllerTest extends TestCase
     }
 
     /**
-     * Make an authenticated API request to the API domain.
+     * Make an API request to the API domain.
      *
      * @param  array<string, mixed>  $headers
      */
     protected function apiGet(string $uri, array $headers = []): TestResponse
     {
-        return $this
-            ->withToken($this->token)
-            ->getJson($this->apiUrl($uri), $headers);
+        return $this->getJson($this->apiUrl($uri), $headers);
     }
 
     #[Test]
@@ -227,23 +218,28 @@ final class RecipeControllerTest extends TestCase
         $response->assertNotFound();
     }
 
+    /**
+     * The fork dropped Sanctum and removed `auth:sanctum` from the API route groups, so the API is
+     * deliberately open. This asserts that decision rather than the authentication it replaced.
+     */
     #[Test]
-    public function it_requires_authentication(): void
+    public function it_does_not_require_authentication(): void
     {
-        // Request without any token to the API domain
+        Recipe::factory()->for($this->country)->create();
+
         $response = $this->getJson($this->apiUrl('/de-DE/recipes'));
 
-        $response->assertUnauthorized();
+        $response->assertOk()
+            ->assertJsonCount(1, 'data');
     }
 
     #[Test]
     public function it_requires_verified_email(): void
     {
         $unverifiedUser = User::factory()->unverified()->create();
-        $token = $unverifiedUser->createToken('test-token')->plainTextToken;
 
         $response = $this
-            ->withToken($token)
+            ->actingAs($unverifiedUser)
             ->getJson($this->apiUrl('/de-DE/recipes'));
 
         $response->assertForbidden();
