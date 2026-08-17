@@ -88,13 +88,7 @@ class HelloFreshClient
      */
     protected function parseTokenFromHtml(string $html): array
     {
-        $pattern = '/<script\s+id="__NEXT_DATA__"\s+type="application\/json">\s*({.+?})\s*<\/script>/s';
-
-        if (! preg_match($pattern, $html, $matches)) {
-            throw new RuntimeException('Could not find __NEXT_DATA__ script tag in HelloFresh HTML response');
-        }
-
-        $jsonData = json_decode($matches[1], true);
+        $jsonData = json_decode($this->extractNextDataJson($html), true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new RuntimeException('Failed to parse __NEXT_DATA__ JSON: ' . json_last_error_msg());
@@ -117,6 +111,37 @@ class HelloFreshClient
             'token' => $token,
             'expires_in' => (int) $expiresIn,
         ];
+    }
+
+    /**
+     * Extract the raw JSON payload of the __NEXT_DATA__ script tag.
+     *
+     * A regular expression is deliberately avoided here: the payload weighs well over a megabyte,
+     * which exhausts PCRE's backtrack limit and makes the match fail rather than throw.
+     *
+     * @throws RuntimeException
+     */
+    protected function extractNextDataJson(string $html): string
+    {
+        $markerPosition = strpos($html, '__NEXT_DATA__');
+
+        if ($markerPosition === false) {
+            throw new RuntimeException('Could not find __NEXT_DATA__ script tag in HelloFresh HTML response');
+        }
+
+        $openingTagEnd = strpos($html, '>', $markerPosition);
+
+        if ($openingTagEnd === false) {
+            throw new RuntimeException('Malformed __NEXT_DATA__ script tag in HelloFresh HTML response');
+        }
+
+        $closingTagStart = strpos($html, '</script>', $openingTagEnd);
+
+        if ($closingTagStart === false) {
+            throw new RuntimeException('Unterminated __NEXT_DATA__ script tag in HelloFresh HTML response');
+        }
+
+        return trim(substr($html, $openingTagEnd + 1, $closingTagStart - $openingTagEnd - 1));
     }
 
     /**
