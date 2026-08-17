@@ -20,9 +20,13 @@ return new class() extends Migration
             [
                 'name' => 'HelloFresh',
                 'password' => Hash::make(Str::random(64)),
-                'email_verified_at' => now(),
             ]
         );
+
+        if ($hellofreshUser->email_verified_at === null) {
+            $hellofreshUser->email_verified_at = now();
+            $hellofreshUser->save();
+        }
 
         Schema::table('recipes', static function (Blueprint $table): void {
             $table->foreignIdFor(User::class, 'author_id')

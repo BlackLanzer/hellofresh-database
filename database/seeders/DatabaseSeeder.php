@@ -15,13 +15,17 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
 
-        User::firstOrCreate(
+        $hellofreshUser = User::firstOrCreate(
             ['email' => 'hellofresh@system.local'],
             [
                 'name' => 'HelloFresh',
                 'password' => Hash::make(Str::random(64)),
-                'email_verified_at' => now(),
             ]
         );
+
+        if ($hellofreshUser->email_verified_at === null) {
+            $hellofreshUser->email_verified_at = now();
+            $hellofreshUser->save();
+        }
     }
 }
