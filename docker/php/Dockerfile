@@ -19,7 +19,7 @@ RUN apk add --no-cache \
     make \
     nodejs \
     npm \
-    && npm install -g pnpm
+    && npm install -g pnpm@10
 
 # Configure and install PHP extensions
 RUN docker-php-ext-configure gd \
