@@ -8,6 +8,10 @@ use App\Http\Controllers\Api\Localized\RecipeController;
 use App\Http\Controllers\Api\Localized\TagController;
 use Illuminate\Support\Facades\Route;
 
+// Registered before the resource so the literal segment is never shadowed by `recipes/{recipe}`.
+Route::get('recipes/random', [RecipeController::class, 'random'])
+    ->name('recipes.random');
+
 Route::apiResource('recipes', RecipeController::class)
     ->only(['index', 'show'])
     ->where(['recipe' => '[0-9]+']);

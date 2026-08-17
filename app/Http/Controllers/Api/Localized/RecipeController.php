@@ -53,6 +53,22 @@ class RecipeController extends AbstractLocalizedController
     }
 
     /**
+     * Display a random recipe.
+     *
+     * Returns a single recipe drawn at random from the current country, in the same shape as the
+     * show endpoint. Responds with 404 when the country has no recipes.
+     */
+    public function random(): RecipeResource
+    {
+        $recipe = Recipe::where('country_id', $this->country()->id)
+            ->with(['country', 'label', 'tags', 'allergens', 'ingredients', 'cuisines', 'utensils'])
+            ->inRandomOrder()
+            ->firstOrFail();
+
+        return new RecipeResource($recipe);
+    }
+
+    /**
      * Display the specified resource.
      */
     public function show(int $recipeId): RecipeResource
