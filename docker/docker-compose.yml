@@ -36,6 +36,7 @@ services:
       # Preserve directories built inside the image (not on the host)
       - hfresh_vendor:/var/www/html/vendor
       - hfresh_public_build:/var/www/html/public/build
+      - ./php/php.ini:/usr/local/etc/php/conf.d/zz-app.ini:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +113,7 @@ services:
     volumes:
       - ..:/var/www/html
       - hfresh_vendor:/var/www/html/vendor
+      - ./php/php.ini:/usr/local/etc/php/conf.d/zz-app.ini:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,6 +134,7 @@ services:
     volumes:
       - ..:/var/www/html
       - hfresh_vendor:/var/www/html/vendor
+      - ./php/php.ini:/usr/local/etc/php/conf.d/zz-app.ini:ro
     depends_on:
       postgres:
         condition: service_healthy
