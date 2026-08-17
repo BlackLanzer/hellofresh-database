@@ -64,6 +64,7 @@ class FilterShareController extends Controller
 
         $mapping = [
             'has_pdf' => 'has_pdf',
+            'only_published' => 'only_published',
             'show_canonical' => 'show_canonical',
             'excluded_allergens' => 'excluded_allergens',
             'ingredients' => 'ingredients',

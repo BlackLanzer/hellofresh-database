@@ -299,6 +299,58 @@ final class RecipeIndexTest extends TestCase
     }
 
     #[Test]
+    public function it_hides_archived_recipes_by_default(): void
+    {
+        Recipe::factory()->for($this->country)->create([
+            'name' => ['en' => 'Published Recipe'],
+            'published' => true,
+        ]);
+        Recipe::factory()->for($this->country)->create([
+            'name' => ['en' => 'Archived Recipe'],
+            'published' => false,
+        ]);
+
+        Livewire::test(RecipeIndex::class)
+            ->assertSet('filterOnlyPublished', true)
+            ->assertSee('Published Recipe')
+            ->assertDontSee('Archived Recipe');
+    }
+
+    #[Test]
+    public function it_shows_archived_recipes_when_the_filter_is_turned_off(): void
+    {
+        Recipe::factory()->for($this->country)->create([
+            'name' => ['en' => 'Archived Recipe'],
+            'published' => false,
+        ]);
+
+        Livewire::test(RecipeIndex::class)
+            ->assertDontSee('Archived Recipe')
+            ->set('filterOnlyPublished', false)
+            ->assertSee('Archived Recipe');
+    }
+
+    #[Test]
+    public function it_counts_showing_archived_recipes_as_an_active_filter(): void
+    {
+        Livewire::test(RecipeIndex::class)
+            ->assertSet('activeFilterCount', 0)
+            ->set('filterOnlyPublished', false)
+            ->assertSet('activeFilterCount', 1)
+            ->set('filterOnlyPublished', true)
+            ->assertSet('activeFilterCount', 0);
+    }
+
+    #[Test]
+    public function it_restores_hiding_archived_recipes_when_filters_are_cleared(): void
+    {
+        Livewire::test(RecipeIndex::class)
+            ->set('filterOnlyPublished', false)
+            ->call('clearFilters')
+            ->assertSet('filterOnlyPublished', true);
+    }
+
+    #[Test]
     public function it_calculates_active_filter_count(): void
     {
         $tag = Tag::factory()->for($this->country)->create();

@@ -72,7 +72,7 @@ class FetchRecipeJob implements ShouldBeUnique, ShouldQueue
             country: $this->country,
             locale: $this->locale,
             recipe: $recipeData,
-            ignoreActive: true,
+            includeInactive: true,
         );
     }
 }

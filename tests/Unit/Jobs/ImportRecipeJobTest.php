@@ -186,6 +186,77 @@ final class ImportRecipeJobTest extends TestCase
     }
 
     #[Test]
+    public function it_imports_inactive_recipes_when_including_inactive(): void
+    {
+        $recipeData = $this->validRecipeData;
+        $recipeData['active'] = false;
+
+        $job = new ImportRecipeJob($this->country, 'en', $recipeData, includeInactive: true);
+        $job->handle();
+
+        $this->assertDatabaseHas('recipes', [
+            'hellofresh_id' => 'hf-recipe-123',
+        ]);
+    }
+
+    #[Test]
+    public function it_creates_unpublished_recipes_as_archived_when_including_unpublished(): void
+    {
+        $recipeData = $this->validRecipeData;
+        $recipeData['isPublished'] = false;
+
+        $job = new ImportRecipeJob($this->country, 'en', $recipeData, includeUnpublished: true);
+        $job->handle();
+
+        $this->assertDatabaseHas('recipes', [
+            'hellofresh_id' => 'hf-recipe-123',
+            'published' => false,
+        ]);
+    }
+
+    #[Test]
+    public function it_still_skips_inactive_recipes_when_only_including_unpublished(): void
+    {
+        $recipeData = $this->validRecipeData;
+        $recipeData['active'] = false;
+
+        $job = new ImportRecipeJob($this->country, 'en', $recipeData, includeUnpublished: true);
+        $job->handle();
+
+        $this->assertDatabaseMissing('recipes', [
+            'hellofresh_id' => 'hf-recipe-123',
+        ]);
+    }
+
+    #[Test]
+    public function it_still_applies_other_filters_when_including_inactive_and_unpublished(): void
+    {
+        $recipeData = $this->validRecipeData;
+        $recipeData['active'] = false;
+        $recipeData['isPublished'] = false;
+        $recipeData['isAddon'] = true;
+
+        $job = new ImportRecipeJob($this->country, 'en', $recipeData, includeInactive: true, includeUnpublished: true);
+        $job->handle();
+
+        $this->assertDatabaseMissing('recipes', [
+            'hellofresh_id' => 'hf-recipe-123',
+        ]);
+    }
+
+    #[Test]
+    public function it_uses_distinct_unique_ids_per_import_flag_combination(): void
+    {
+        $base = new ImportRecipeJob($this->country, 'en', $this->validRecipeData);
+        $active = new ImportRecipeJob($this->country, 'en', $this->validRecipeData, includeInactive: true);
+        $unpublished = new ImportRecipeJob($this->country, 'en', $this->validRecipeData, includeUnpublished: true);
+
+        $this->assertNotSame($base->uniqueId(), $active->uniqueId());
+        $this->assertNotSame($base->uniqueId(), $unpublished->uniqueId());
+        $this->assertNotSame($active->uniqueId(), $unpublished->uniqueId());
+    }
+
+    #[Test]
     public function it_skips_recipes_without_steps(): void
     {
         $recipeData = $this->validRecipeData;

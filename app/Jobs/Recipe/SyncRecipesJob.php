@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Bus;
 use Throwable;
 
 /**
- * @method static void dispatch(bool $fullSync = false)
+ * @method static void dispatch(bool $fullSync = false, bool $includeInactive = false, bool $includeUnpublished = false)
  */
 class SyncRecipesJob implements LauncherJobInterface, ShouldQueue
 {
@@ -21,9 +21,13 @@ class SyncRecipesJob implements LauncherJobInterface, ShouldQueue
      * Create a new job instance.
      *
      * @param  bool  $fullSync  Whether to paginate through all recipes (true) or only fetch the first page (false)
+     * @param  bool  $includeInactive  Whether to import recipes flagged as inactive by the HelloFresh API
+     * @param  bool  $includeUnpublished  Whether to create recipes the HelloFresh API reports as unpublished (they land archived)
      */
     public function __construct(
         public bool $fullSync = false,
+        public bool $includeInactive = false,
+        public bool $includeUnpublished = false,
     ) {
         $this->onQueue(QueueEnum::HelloFresh->value);
     }
@@ -50,12 +54,12 @@ class SyncRecipesJob implements LauncherJobInterface, ShouldQueue
         foreach ($countries as $country) {
             $primaryLocale = $country->locales[0] ?? null;
             if ($primaryLocale !== null) {
-                $primaryJobs[] = new FetchRecipePageJob($country, $primaryLocale, paginates: $this->fullSync);
+                $primaryJobs[] = new FetchRecipePageJob($country, $primaryLocale, paginates: $this->fullSync, includeInactive: $this->includeInactive, includeUnpublished: $this->includeUnpublished);
             }
 
             $secondaryLocale = $country->locales[1] ?? null;
             if ($secondaryLocale !== null) {
-                $secondaryJobs[] = new FetchRecipePageJob($country, $secondaryLocale, paginates: $this->fullSync);
+                $secondaryJobs[] = new FetchRecipePageJob($country, $secondaryLocale, paginates: $this->fullSync, includeInactive: $this->includeInactive, includeUnpublished: $this->includeUnpublished);
             }
         }
 

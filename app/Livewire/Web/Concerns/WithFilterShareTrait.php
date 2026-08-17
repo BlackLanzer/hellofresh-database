@@ -167,8 +167,9 @@ trait WithFilterShareTrait
             $filters['has_pdf'] = true;
         }
 
-        if ($this->filterOnlyPublished) {
-            $filters['only_published'] = true;
+        // Only shared when it deviates from the default, which is to hide archived recipes.
+        if (! $this->filterOnlyPublished) {
+            $filters['only_published'] = false;
         }
 
         $filters['ingredient_match'] = $this->ingredientMatchMode;

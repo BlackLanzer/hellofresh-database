@@ -44,12 +44,15 @@ class ImportRecipeJob implements ShouldBeUnique, ShouldQueue
      * Create a new job instance.
      *
      * @param  RecipeData  $recipe
+     * @param  bool  $includeInactive  Whether to import recipes the HelloFresh API flags as inactive
+     * @param  bool  $includeUnpublished  Whether to create recipes the HelloFresh API reports as unpublished (they land archived)
      */
     public function __construct(
         public Country $country,
         public string $locale,
         public array $recipe,
-        public bool $ignoreActive = false,
+        public bool $includeInactive = false,
+        public bool $includeUnpublished = false,
     ) {
         $this->onQueue(QueueEnum::Import->value);
     }
@@ -61,9 +64,10 @@ class ImportRecipeJob implements ShouldBeUnique, ShouldQueue
      */
     public function uniqueId(): string
     {
-        $ignoreActive = $this->ignoreActive ? '1' : '0';
+        $includeInactive = $this->includeInactive ? '1' : '0';
+        $includeUnpublished = $this->includeUnpublished ? '1' : '0';
 
-        return $this->country->id . '-' . $this->locale . '-' . $this->recipe['id'] . '-' . $ignoreActive;
+        return $this->country->id . '-' . $this->locale . '-' . $this->recipe['id'] . '-' . $includeInactive . '-' . $includeUnpublished;
     }
 
     /**
@@ -146,7 +150,7 @@ class ImportRecipeJob implements ShouldBeUnique, ShouldQueue
             return $recipe;
         }
 
-        if (! $this->recipe['isPublished']) {
+        if (! $this->includeUnpublished && ! $this->recipe['isPublished']) {
             return null;
         }
 
@@ -411,7 +415,7 @@ class ImportRecipeJob implements ShouldBeUnique, ShouldQueue
      */
     protected function shouldImport(): bool
     {
-        if (! $this->ignoreActive && ! $this->recipe['active']) {
+        if (! $this->includeInactive && ! $this->recipe['active']) {
             return false;
         }
 

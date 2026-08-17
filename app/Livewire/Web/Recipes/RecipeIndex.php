@@ -45,7 +45,7 @@ class RecipeIndex extends AbstractComponent
 
     public bool $filterHasPdf = false;
 
-    public bool $filterOnlyPublished = false;
+    public bool $filterOnlyPublished = true;
 
     /** @deprecated Legacy property - no longer used */
     public bool $filterHideVariants = false;
@@ -139,7 +139,7 @@ class RecipeIndex extends AbstractComponent
         $this->selectedMenuWeek = $this->menu?->year_week;
         $this->viewMode = session('view_mode', ViewModeEnum::Grid->value);
         $this->filterHasPdf = session($this->filterSessionKey('has_pdf'), false);
-        $this->filterOnlyPublished = session($this->filterSessionKey('only_published'), false);
+        $this->filterOnlyPublished = session($this->filterSessionKey('only_published'), true);
         $this->excludedAllergenIds = session($this->filterSessionKey('excluded_allergens'), []);
         $this->ingredientIds = session($this->filterSessionKey('ingredients'), []);
         $this->ingredientMatchMode = session($this->filterSessionKey('ingredient_match'), IngredientMatchModeEnum::Any->value);
@@ -356,7 +356,7 @@ class RecipeIndex extends AbstractComponent
     public function activeFilterCount(): int
     {
         return (int) $this->filterHasPdf
-            + (int) $this->filterOnlyPublished
+            + (int) (! $this->filterOnlyPublished)
             + (int) ($this->excludedAllergenIds !== [])
             + (int) ($this->ingredientIds !== [])
             + (int) ($this->excludedIngredientIds !== [])
@@ -404,7 +404,7 @@ class RecipeIndex extends AbstractComponent
     public function clearFilters(): void
     {
         $this->filterHasPdf = false;
-        $this->filterOnlyPublished = false;
+        $this->filterOnlyPublished = true;
         $this->allergenSearch = '';
         $this->excludedAllergenIds = [];
         $this->ingredientIds = [];
