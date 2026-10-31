@@ -1,0 +1,151 @@
+# ============================================================
+# HelloFresh Database – Docker Compose (production)
+# ============================================================
+#
+# Differences from the development stack:
+#   - source code is baked into the image, never bind-mounted
+#   - postgres and redis publish no host ports (reachable only on the
+#     internal network)
+#   - the database password is required, with no fallback default
+#   - horizon and the scheduler reuse the app image via CONTAINER_ROLE
+#
+# See README.md for the deployment procedure.
+# ============================================================
+
+services:
+
+  # ── PHP-FPM application ──────────────────────────────────
+  app:
+    build:
+      context: ..
+      dockerfile: production/docker/php/Dockerfile
+    image: hellofresh-app:latest
+    container_name: hfresh_app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CONTAINER_ROLE: app
+    volumes:
+      - hfresh_storage:/var/www/html/storage/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hellofresh
+
+  # ── Nginx web server ─────────────────────────────────────
+  nginx:
+    build:
+      context: ..
+      dockerfile: production/docker/nginx/Dockerfile
+    image: hellofresh-nginx:latest
+    container_name: hfresh_nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-80}:80"
+    environment:
+      NGINX_SERVER_NAME: "${NGINX_SERVER_NAME:-_}"
+    volumes:
+      - hfresh_storage:/var/www/html/storage/app:ro
+    depends_on:
+      - app
+    networks:
+      - hellofresh
+
+  # ── PostgreSQL database ──────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: hfresh_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${DB_DATABASE:?DB_DATABASE is required}"
+      POSTGRES_USER: "${DB_USERNAME:?DB_USERNAME is required}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"
+    volumes:
+      - hfresh_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hellofresh
+
+  # ── Redis (cache + queues) ───────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: hfresh_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - hfresh_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hellofresh
+
+  # ── Laravel Horizon (queue worker) ───────────────────────
+  # Disabled: the database is final and no import/sync jobs are dispatched.
+  # Start it only when you deliberately queue jobs:
+  #   docker compose --profile workers up -d horizon scheduler
+  horizon:
+    profiles: ["workers"]
+    image: hellofresh-app:latest
+    container_name: hfresh_horizon
+    command: php artisan horizon
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CONTAINER_ROLE: horizon
+    stop_signal: SIGTERM
+    stop_grace_period: 60s
+    volumes:
+      - hfresh_storage:/var/www/html/storage/app
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hellofresh
+
+  # ── Laravel Scheduler ────────────────────────────────────
+  # Disabled with the same rationale as horizon (routes/console.php has every
+  # schedule commented out; images:download runs synchronously).
+  scheduler:
+    profiles: ["workers"]
+    image: hellofresh-app:latest
+    container_name: hfresh_scheduler
+    command: php artisan schedule:work
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CONTAINER_ROLE: scheduler
+    volumes:
+      - hfresh_storage:/var/www/html/storage/app
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hellofresh
+
+
+volumes:
+  hfresh_postgres_data:
+  hfresh_redis_data:
+  hfresh_storage:
+
+networks:
+  hellofresh:
+    driver: bridge

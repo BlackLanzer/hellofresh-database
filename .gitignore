@@ -36,3 +36,5 @@ package.lock
 /build/
 .pnpm-store/
 *.sql
+# Database exports are transferred out-of-band, not through git
+/production/database/*.dump
