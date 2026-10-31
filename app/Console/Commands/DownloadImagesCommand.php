@@ -15,6 +15,12 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'images:download')]
 class DownloadImagesCommand extends Command implements LauncherCommandInterface
 {
+    protected const string RESULT_DOWNLOADED = 'downloaded';
+
+    protected const string RESULT_SKIPPED = 'skipped';
+
+    protected const string RESULT_FAILED = 'failed';
+
     /**
      * The transformation to apply when downloading recipe images.
      */
@@ -31,13 +37,57 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
     protected string $stepTransformation = 'w_600,q_auto,f_jpg,fl_lossy';
 
     /**
+     * Whether recipe and step images are limited to published recipes.
+     */
+    protected bool $onlyPublished = false;
+
+    /**
+     * The number of new downloads after which the run stops, or null for no limit.
+     */
+    protected ?int $limit = null;
+
+    /**
+     * The pause after every download request, in milliseconds.
+     */
+    protected int $delayMs = 0;
+
+    /**
+     * The number of consecutive blocked requests after which the run aborts, or 0 to never abort.
+     */
+    protected int $maxFailures = 5;
+
+    /**
+     * The number of new images downloaded during this run.
+     */
+    protected int $downloadedTotal = 0;
+
+    /**
+     * The number of blocked or failed requests in a row.
+     */
+    protected int $consecutiveFailures = 0;
+
+    /**
+     * Why the run stopped early, or null if it ran to the end.
+     */
+    protected ?string $stopReason = null;
+
+    /**
+     * Whether the run stopped early because the server seems to block the requests.
+     */
+    protected bool $aborted = false;
+
+    /**
      * The name and signature of the console command.
      *
      * @var string
      */
     protected $signature = 'images:download
                             {--type=all : The type of images to download (all, recipes, ingredients, steps)}
-                            {--force : Re-download images that already exist locally}';
+                            {--force : Re-download images that already exist locally}
+                            {--published : Only download images of published recipes (recipes and steps)}
+                            {--limit= : Stop after downloading this many new images}
+                            {--delay=0 : Milliseconds to wait after each download request}
+                            {--max-failures=5 : Abort after this many consecutive blocked or failed requests (0 to disable)}';
 
     /**
      * The console command description.
@@ -49,8 +99,12 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
     /**
      * Execute the console command.
      */
-    public function handle(): void
+    public function handle(): int
     {
+        if (! $this->resolveOptions()) {
+            return self::FAILURE;
+        }
+
         $type = $this->option('type');
         $force = (bool) $this->option('force');
 
@@ -63,7 +117,65 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
             default => $this->downloadAll($force),
         };
 
+        return $this->reportOutcome();
+    }
+
+    /**
+     * Validate the throttling options and keep their values.
+     */
+    protected function resolveOptions(): bool
+    {
+        $validator = validator(
+            [
+                'limit' => $this->option('limit'),
+                'delay' => $this->option('delay'),
+                'max-failures' => $this->option('max-failures'),
+            ],
+            [
+                'limit' => ['nullable', 'integer', 'min:1'],
+                'delay' => ['required', 'integer', 'min:0'],
+                'max-failures' => ['required', 'integer', 'min:0'],
+            ]
+        );
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->all() as $message) {
+                $this->components->error($message);
+            }
+
+            return false;
+        }
+
+        $limit = $this->option('limit');
+
+        $this->onlyPublished = (bool) $this->option('published');
+        $this->limit = $limit === null ? null : (int) $limit;
+        $this->delayMs = (int) $this->option('delay');
+        $this->maxFailures = (int) $this->option('max-failures');
+
+        return true;
+    }
+
+    /**
+     * Tell how the run ended and return the matching exit code.
+     */
+    protected function reportOutcome(): int
+    {
+        if ($this->aborted) {
+            $this->components->error($this->stopReason);
+
+            return self::FAILURE;
+        }
+
+        if ($this->stopReason !== null) {
+            $this->components->warn($this->stopReason);
+
+            return self::SUCCESS;
+        }
+
         $this->components->info('Image download complete.');
+
+        return self::SUCCESS;
     }
 
     /**
@@ -72,7 +184,17 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
     protected function downloadAll(bool $force): void
     {
         $this->downloadRecipeImages($force);
+
+        if ($this->stopReason !== null) {
+            return;
+        }
+
         $this->downloadIngredientImages($force);
+
+        if ($this->stopReason !== null) {
+            return;
+        }
+
         $this->downloadStepImages($force);
     }
 
@@ -84,6 +206,7 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
         $this->components->info('Downloading recipe images...');
 
         $paths = Recipe::query()
+            ->when($this->onlyPublished, static fn ($query) => $query->where('published', true))
             ->whereNotNull('image_path')
             ->pluck('image_path')
             ->unique()
@@ -130,6 +253,7 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
         $paths = collect();
 
         Recipe::query()
+            ->when($this->onlyPublished, static fn ($query) => $query->where('published', true))
             ->where(function ($query): void {
                 $query->whereNotNull('steps_primary')
                     ->orWhereNotNull('steps_secondary');
@@ -180,41 +304,118 @@ class DownloadImagesCommand extends Command implements LauncherCommandInterface
             return;
         }
 
-        $downloaded = 0;
-        $skipped = 0;
-        $failed = 0;
+        $counts = [
+            self::RESULT_DOWNLOADED => 0,
+            self::RESULT_SKIPPED => 0,
+            self::RESULT_FAILED => 0,
+        ];
 
-        $this->withProgressBar($paths, function (string $imagePath) use ($transformation, $force, &$downloaded, &$skipped, &$failed): void {
-            $localPath = 'hellofresh' . $imagePath;
+        $progressBar = $this->output->createProgressBar($paths->count());
+        $progressBar->start();
 
-            if (! $force && Storage::disk('public')->exists($localPath)) {
-                $skipped++;
-
-                return;
+        foreach ($paths as $imagePath) {
+            if ($this->stopReason !== null) {
+                break;
             }
 
-            $url = $this->buildDownloadUrl($imagePath, $transformation);
+            $counts[$this->downloadImage($imagePath, $transformation, $force)]++;
+            $progressBar->advance();
+        }
 
-            try {
-                $response = Http::timeout(30)->get($url);
-
-                if (! $response->successful()) {
-                    $failed++;
-
-                    return;
-                }
-
-                Storage::disk('public')->put($localPath, $response->body());
-                $downloaded++;
-            } catch (ConnectionException) {
-                $failed++;
-            }
-        });
+        $progressBar->finish();
 
         $this->newLine();
-        $this->components->twoColumnDetail('Downloaded', (string) $downloaded);
-        $this->components->twoColumnDetail('Skipped (already exist)', (string) $skipped);
-        $this->components->twoColumnDetail('Failed', (string) $failed);
+        $this->components->twoColumnDetail('Downloaded', (string) $counts[self::RESULT_DOWNLOADED]);
+        $this->components->twoColumnDetail('Skipped (already exist)', (string) $counts[self::RESULT_SKIPPED]);
+        $this->components->twoColumnDetail('Failed', (string) $counts[self::RESULT_FAILED]);
+    }
+
+    /**
+     * Download a single image and return what happened to it.
+     */
+    protected function downloadImage(string $imagePath, string $transformation, bool $force): string
+    {
+        $localPath = 'hellofresh' . $imagePath;
+
+        if (! $force && Storage::disk('public')->exists($localPath)) {
+            return self::RESULT_SKIPPED;
+        }
+
+        $url = $this->buildDownloadUrl($imagePath, $transformation);
+
+        try {
+            $response = Http::timeout(30)->get($url);
+        } catch (ConnectionException) {
+            $this->registerFailure(null);
+            $this->pause();
+
+            return self::RESULT_FAILED;
+        }
+
+        $this->pause();
+
+        if (! $response->successful()) {
+            $this->registerFailure($response->status());
+
+            return self::RESULT_FAILED;
+        }
+
+        Storage::disk('public')->put($localPath, $response->body());
+
+        $this->registerDownload();
+
+        return self::RESULT_DOWNLOADED;
+    }
+
+    /**
+     * Count a new download and stop the run once the limit is reached.
+     */
+    protected function registerDownload(): void
+    {
+        $this->downloadedTotal++;
+        $this->consecutiveFailures = 0;
+
+        if ($this->limit !== null && $this->downloadedTotal >= $this->limit) {
+            $this->stopReason = sprintf('Limit of %d new images reached. Run the command again to continue.', $this->limit);
+        }
+    }
+
+    /**
+     * Count a failed request and abort the run when the server seems to block it.
+     */
+    protected function registerFailure(?int $status): void
+    {
+        if (! $this->isBlockingFailure($status)) {
+            return;
+        }
+
+        $this->consecutiveFailures++;
+
+        if ($this->maxFailures > 0 && $this->consecutiveFailures >= $this->maxFailures) {
+            $this->aborted = true;
+            $this->stopReason = sprintf(
+                'Aborted after %d consecutive blocked or failed requests. Wait a while, then run the command again to continue.',
+                $this->consecutiveFailures
+            );
+        }
+    }
+
+    /**
+     * Whether a failed request hints at rate limiting rather than at a single missing image.
+     */
+    protected function isBlockingFailure(?int $status): bool
+    {
+        return $status === null || $status === 429 || $status === 403 || $status >= 500;
+    }
+
+    /**
+     * Wait between two requests.
+     */
+    protected function pause(): void
+    {
+        if ($this->delayMs > 0) {
+            usleep($this->delayMs * 1000);
+        }
     }
 
     /**
