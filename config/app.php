@@ -58,6 +58,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Force HTTPS
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, every URL generated outside the "local" environment uses
+    | the https scheme. Disable it when the app is served over plain http
+    | (e.g. behind a LAN address without a TLS-terminating proxy).
+    |
+    */
+
+    'force_https' => (bool) env('APP_FORCE_HTTPS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

@@ -23,7 +23,7 @@ class FrontendServiceProvider extends ServiceProvider
      */
     protected function configureUrlGenerator(): void
     {
-        if (! $this->app->isLocal()) {
+        if (! $this->app->isLocal() && config('app.force_https')) {
             URL::forceScheme('https');
         }
     }
