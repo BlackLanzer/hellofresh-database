@@ -324,6 +324,33 @@ class Recipe extends Model
     }
 
     /**
+     * Get the local storage path for the recipe card PDF.
+     *
+     * @return Attribute<string, never>
+     */
+    protected function pdfLocalPath(): Attribute
+    {
+        return Attribute::get(fn (): string => $this->buildPdfLocalPath());
+    }
+
+    /**
+     * Build the deterministic local storage path for the recipe card PDF.
+     */
+    protected function buildPdfLocalPath(): string
+    {
+        $name = $this->name;
+        $slug = Str::slug(is_string($name) ? $name : '');
+
+        if ($slug === '') {
+            $slug = 'recipe';
+        }
+
+        $slug = Str::limit($slug, 60, '');
+
+        return sprintf('hellofresh/recipecards/%d-%s.pdf', (int) $this->id, $slug);
+    }
+
+    /**
      * Get the first available translation for an attribute.
      */
     public function getFirstTranslation(string $attribute): ?string
