@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\ActivatableTrait;
 use App\Models\Concerns\LogsModificationsTrait;
 use App\Observers\RecipeObserver;
+use App\Services\Pdf\RecipeCardPdfGenerator;
 use App\Support\HelloFresh\HelloFreshAsset;
 use Database\Factories\RecipeFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\Translatable\HasTranslations;
 
@@ -321,6 +323,30 @@ class Recipe extends Model
         }
 
         return $url !== '' ? $url : null;
+    }
+
+    /**
+     * Get the local path of the generated recipe card PDF.
+     *
+     * @return Attribute<string, never>
+     */
+    protected function pdfLocalPath(): Attribute
+    {
+        return Attribute::get(
+            fn (): string => RecipeCardPdfGenerator::pathForLocale($this, app()->getLocale())
+        );
+    }
+
+    /**
+     * Get the public URL of the generated recipe card PDF.
+     *
+     * @return Attribute<string, never>
+     */
+    protected function pdfLocalUrl(): Attribute
+    {
+        return Attribute::get(
+            fn (): string => Storage::disk(RecipeCardPdfGenerator::DISK)->url($this->pdf_local_path)
+        );
     }
 
     /**

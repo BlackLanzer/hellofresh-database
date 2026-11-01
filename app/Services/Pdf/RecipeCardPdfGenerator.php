@@ -36,8 +36,24 @@ class RecipeCardPdfGenerator
      */
     public function pathFor(Recipe $recipe, string $locale): string
     {
-        $name = $this->translatedValue($recipe, 'name', $locale);
-        $slug = $name !== null ? trim(Str::limit(Str::slug($name), 80, ''), '-') : '';
+        return static::pathForLocale($recipe, $locale);
+    }
+
+    /**
+     * Build the deterministic output path for a recipe and locale.
+     *
+     * This is the single source of truth for the path scheme: the model's
+     * `pdf_local_path` accessor and `pathFor()` both delegate here.
+     */
+    public static function pathForLocale(Recipe $recipe, string $locale): string
+    {
+        $name = $recipe->hasTranslation('name', $locale)
+            ? $recipe->translate('name', $locale)
+            : $recipe->getFirstTranslation('name');
+
+        $slug = is_string($name)
+            ? trim(Str::limit(Str::slug($name), 80, ''), '-')
+            : '';
 
         if ($slug === '') {
             $slug = 'recipe';

@@ -23,11 +23,12 @@
         @endif
         @if ($recipe->pdf_url)
           <a
-            href="{{ $recipe->pdf_url }}"
+            href="{{ localized_route('localized.recipes.pdf', ['recipe' => $recipe->id]) }}"
             target="_blank"
             rel="noopener noreferrer"
             class="rounded-full p-2 transition-colors bg-white/80 text-zinc-700 hover:bg-white dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title="{{ __('View PDF') }}"
+            title="{{ __('Scarica il PDF della ricetta') }}"
+            aria-label="{{ __('Scarica il PDF della ricetta') }}"
           >
             <flux:icon.file-text variant="mini" />
           </a>
@@ -223,11 +224,12 @@
       @endif
       @if ($recipe->pdf_url)
         <a
-          href="{{ $recipe->pdf_url }}"
+          href="{{ localized_route('localized.recipes.pdf', ['recipe' => $recipe->id]) }}"
           target="_blank"
           rel="noopener noreferrer"
           class="rounded-full p-2 transition-colors bg-white/80 text-zinc-700 hover:bg-white dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          title="{{ __('View PDF') }}"
+          title="{{ __('Scarica il PDF della ricetta') }}"
+          aria-label="{{ __('Scarica il PDF della ricetta') }}"
         >
           <flux:icon.file-text variant="mini" />
         </a>

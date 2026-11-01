@@ -3,6 +3,7 @@
 use App\Http\Controllers\BringExportController;
 use App\Http\Controllers\FilterShareController;
 use App\Http\Controllers\MenuRedirectController;
+use App\Http\Controllers\RecipePdfController;
 use App\Http\Controllers\RecipeRedirectController;
 use App\Livewire\Web\Admin\IngredientIndex;
 use App\Livewire\Web\Admin\RecipeForm;
@@ -43,6 +44,10 @@ Route::get('recipes/{slug}-{uuid}', RecipeRedirectController::class)
 Route::get('recipes/{slug}-{recipe}', RecipeShow::class)
     ->where(['slug' => '.*', 'recipe' => '[0-9]+'])
     ->name('recipes.show');
+
+Route::get('recipes/{recipe}/pdf', RecipePdfController::class)
+    ->where('recipe', '[0-9]+')
+    ->name('recipes.pdf');
 
 Route::get('s/{id}', [FilterShareController::class, '__invoke'])->name('filter-share');
 
